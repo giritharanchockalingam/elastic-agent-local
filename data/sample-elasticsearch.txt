@@ -1,0 +1,35 @@
+Elasticsearch is a distributed, RESTful search and analytics engine built on Apache Lucene.
+It is the core component of the Elastic Stack, which also includes Kibana, Logstash, and Beats.
+
+Elasticsearch stores data as JSON documents. When you index a document, it is stored and indexed
+so that it can be searched in near real-time — within approximately one second. Elasticsearch uses
+a data structure called an inverted index that supports very fast full-text searches.
+
+Key features of Elasticsearch include:
+- Full-text search with relevance scoring using BM25
+- Vector search for semantic similarity using dense and sparse vectors
+- Aggregations for real-time analytics
+- Distributed architecture with automatic sharding and replication
+- RESTful API accessible via HTTP/JSON
+- Schema-free JSON documents with dynamic mapping
+
+Elasticsearch supports hybrid search, which combines traditional keyword (BM25) search with
+vector similarity search. This approach leverages the strengths of both methods: keyword search
+excels at exact matches and known terminology, while vector search captures semantic meaning
+and finds conceptually similar content even when different words are used.
+
+The Elasticsearch Query DSL (Domain Specific Language) is a flexible JSON-based query language.
+Common query types include match queries for full-text search, term queries for exact matches,
+bool queries for combining multiple conditions, and knn queries for vector similarity search.
+
+ES|QL (Elasticsearch Query Language) is a piped query language for filtering, transforming,
+and analyzing data. It supports commands like FROM, WHERE, STATS, SORT, LIMIT, and EVAL.
+ES|QL was designed to be easy to learn for users familiar with SQL or Unix pipes.
+
+Elasticsearch indices can be configured with mappings that define the data types for each field.
+Important field types include text (analyzed for full-text search), keyword (exact values),
+dense_vector (for vector embeddings), date, integer, float, and boolean.
+
+For production deployments, Elasticsearch clusters typically have dedicated master nodes,
+data nodes, and coordinating nodes. Index Lifecycle Management (ILM) policies automate
+the management of indices through hot, warm, cold, and delete phases.

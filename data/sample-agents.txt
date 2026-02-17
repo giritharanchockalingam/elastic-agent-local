@@ -1,0 +1,38 @@
+AI Agents are autonomous systems that use large language models (LLMs) to reason, plan,
+and take actions to accomplish goals. Unlike simple chatbots that respond to one query at a time,
+agents can break down complex tasks, use tools, and iterate on their approach.
+
+The key components of an AI agent are:
+- An LLM as the reasoning engine (e.g., GPT, Claude, Llama, Mistral)
+- A set of tools the agent can invoke (search, calculators, APIs, databases)
+- Memory for maintaining context across interactions
+- A planning mechanism for breaking down complex tasks
+
+Retrieval Augmented Generation (RAG) is a technique where an LLM's response is enhanced by
+retrieving relevant information from an external knowledge base before generating an answer.
+This reduces hallucination and allows the model to access up-to-date or domain-specific information.
+
+Agentic RAG extends basic RAG by adding decision-making capabilities. Instead of always retrieving
+and generating, an agentic RAG system can:
+- Route queries to different retrieval strategies based on the question type
+- Grade retrieved documents for relevance before using them
+- Fall back to web search when the knowledge base lacks relevant information
+- Self-correct by re-retrieving or reformulating queries when initial results are poor
+
+LangGraph is an orchestration framework for building stateful, multi-step agent workflows.
+It uses a graph-based approach where nodes represent actions (like retrieval or generation)
+and edges define the flow between them. Conditional edges enable dynamic routing based on
+the current state.
+
+The Model Context Protocol (MCP) is an open standard for LLMs to communicate with external
+systems. It allows tools and data sources to be exposed in a standardized way, enabling
+interoperability between different agent frameworks and LLM providers.
+
+Common agent design patterns include:
+- ReAct (Reasoning + Acting): The agent reasons about what to do, takes an action, observes
+  the result, and repeats until the task is complete.
+- Reflection: A critic agent evaluates the output of a generator agent and provides feedback
+  for improvement in an iterative loop.
+- Multi-agent collaboration: Multiple specialized agents work together, each handling a
+  different aspect of a complex task.
+- Tool use: The agent selects and invokes appropriate tools based on the task requirements.
