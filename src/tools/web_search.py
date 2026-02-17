@@ -1,6 +1,7 @@
 """Web search fallback tool using DuckDuckGo (free, no API key)."""
 from langchain_core.tools import tool
 
+
 @tool
 def web_search(query: str) -> str:
     """Search the web using DuckDuckGo for up-to-date information.
@@ -11,11 +12,22 @@ def web_search(query: str) -> str:
         from duckduckgo_search import DDGS
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=3))
+
         if not results:
-            return "No web results found."
+            return f"Web search for '{query}' returned no results. Try a different query."
+
         formatted = []
         for i, r in enumerate(results, 1):
-            formatted.append(f"[Result {i}] {r.get('title', 'No title')}\nURL: {r.get('href', 'N/A')}\n{r.get('body', 'No snippet')}")
-        return "\n\n---\n\n".join(formatted)
+            title = r.get("title", "No title")
+            href = r.get("href", "N/A")
+            body = r.get("body", "No snippet")
+            formatted.append(f"[Result {i}] {title}\nURL: {href}\nSnippet: {body}")
+
+        output = "\n\n---\n\n".join(formatted)
+        print(f"[web_search] Found {len(results)} results for: {query}")
+        return output
+
+    except ImportError:
+        return "Error: duckduckgo-search not installed. Run: pip install duckduckgo-search>=7.0.0"
     except Exception as e:
-        return f"Error performing web search: {e}"
+        return f"Web search error for '{query}': {str(e)}"
