@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # One-command startup for elastic-agent-local
 # Usage: bash start.sh
 
@@ -8,7 +8,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BLUE}  elastic-agent-local — Local AI Agent Stack${NC}"
@@ -36,7 +36,7 @@ for i in $(seq 1 30); do
         echo -e "${GREEN}  ✓ Elasticsearch is ready (localhost:9200)${NC}"
         break
     fi
-    if [ $i -eq 30 ]; then
+    if [ "$i" -eq 30 ]; then
         echo -e "${RED}  Elasticsearch failed to start. Run: docker compose logs elasticsearch${NC}"
         exit 1
     fi
@@ -47,29 +47,31 @@ echo -e "${GREEN}  ✓ Kibana is starting (localhost:5601)${NC}"
 # ── Check Ollama ──
 echo -e "${YELLOW}[3/7] Checking Ollama...${NC}"
 if ! command -v ollama &> /dev/null; then
-    echo -e "${RED}Ollama is not installed. Install: brew install ollama${NC}"
+    echo -e "${RED}Ollama is not installed.${NC}"
+    echo -e "${RED}  macOS: brew install ollama${NC}"
+    echo -e "${RED}  Linux: curl -fsSL https://ollama.com/install.sh | sh${NC}"
     exit 1
 fi
 if ! curl -s http://localhost:11434 > /dev/null 2>&1; then
     echo -e "  Starting Ollama..."
     if command -v brew &> /dev/null; then
-        brew services start ollama 2>/dev/null || ollama serve &
+        brew services start ollama 2>/dev/null || nohup ollama serve > /dev/null 2>&1 &
     else
-        ollama serve &
+        nohup ollama serve > /dev/null 2>&1 &
     fi
-    sleep 3
+    sleep 5
 fi
 echo -e "${GREEN}  ✓ Ollama is running (localhost:11434)${NC}"
 
 # ── Pull models ──
 echo -e "${YELLOW}[4/7] Pulling LLM models (if needed)...${NC}"
-if ! ollama list | grep -q "llama3.2"; then
+if ! ollama list 2>/dev/null | grep -q "llama3.2"; then
     echo -e "  Pulling llama3.2 (~2GB)..."
     ollama pull llama3.2
 else
     echo -e "  llama3.2 already pulled"
 fi
-if ! ollama list | grep -q "nomic-embed-text"; then
+if ! ollama list 2>/dev/null | grep -q "nomic-embed-text"; then
     echo -e "  Pulling nomic-embed-text (~274MB)..."
     ollama pull nomic-embed-text
 else
@@ -79,8 +81,18 @@ echo -e "${GREEN}  ✓ Models ready${NC}"
 
 # ── Python environment ──
 echo -e "${YELLOW}[5/7] Setting up Python environment...${NC}"
+PYTHON_CMD=""
+if command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+else
+    echo -e "${RED}Python 3.11+ is required. Install from https://python.org${NC}"
+    exit 1
+fi
+
 if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
+    $PYTHON_CMD -m venv .venv
     echo -e "  Created virtual environment"
 fi
 source .venv/bin/activate
@@ -100,7 +112,7 @@ fi
 
 # ── Ingest documents ──
 echo -e "${YELLOW}[6/7] Checking document ingestion...${NC}"
-DOC_COUNT=$(curl -s "http://localhost:9200/knowledge-base/_count" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo "0")
+DOC_COUNT=$(curl -s "http://localhost:9200/knowledge-base/_count" 2>/dev/null | $PYTHON_CMD -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo "0")
 if [ "$DOC_COUNT" = "0" ]; then
     echo -e "  Index is empty — ingesting sample documents..."
     python -m src.ingest.loader
