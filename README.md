@@ -282,6 +282,18 @@ lsof -ti:8501 | xargs kill -9
 docker compose down
 ```
 
+### "Bad CPU type in executable" on Intel Mac
+
+If you see `bash: /opt/homebrew/bin/bash: Bad CPU type in executable`, your system has Apple Silicon Homebrew installed on an Intel Mac. Fix:
+
+```bash
+# Option 1: Use the system bash directly
+/bin/bash start.sh
+
+# Option 2: Fix your PATH permanently (add to ~/.zshrc or ~/.bash_profile)
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+```
+
 ## How It Was Built
 
 This project was built using a **vibecoding** approach — natural language prompts fed to an AI coding assistant across 10 phases:
