@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_elasticsearch import ElasticsearchStore
 from langchain_ollama import OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -37,7 +38,7 @@ def get_vector_store() -> ElasticsearchStore:
 
 
 def load_documents(data_dir: str) -> list:
-    """Load documents from the data directory (.txt, .md, .csv files)."""
+    """Load documents from the data directory (.txt, .md, .csv, .pdf files)."""
     docs = []
     data_path = Path(data_dir)
 
@@ -45,7 +46,7 @@ def load_documents(data_dir: str) -> list:
         print(f"  Data directory not found: {data_path}")
         return docs
 
-    # Load all supported text formats using TextLoader (no extra deps needed)
+    # Load text-based formats using TextLoader (no extra deps needed)
     for pattern in ["*.txt", "*.md", "*.csv", "*.rst"]:
         files = list(data_path.glob(pattern))
         if files:
@@ -55,11 +56,29 @@ def load_documents(data_dir: str) -> list:
                 glob=pattern,
                 loader_cls=TextLoader,
                 loader_kwargs={"encoding": "utf-8", "autodetect_encoding": True},
-                silent_errors=True,  # Skip files that fail to load
+                silent_errors=True,
             )
             loaded = loader.load()
             docs.extend(loaded)
             print(f"    Loaded {len(loaded)} files successfully")
+
+    # Load PDF files (requires pypdf)
+    pdf_files = list(data_path.glob("*.pdf"))
+    if pdf_files:
+        print(f"  Found {len(pdf_files)} *.pdf files")
+        loaded_count = 0
+        for pdf_file in pdf_files:
+            try:
+                loader = PyPDFLoader(str(pdf_file))
+                pdf_docs = loader.load()
+                docs.extend(pdf_docs)
+                loaded_count += 1
+            except ImportError:
+                print("    ERROR: pypdf not installed. Run: pip install pypdf")
+                break
+            except Exception as e:
+                print(f"    Warning: could not load {pdf_file.name}: {e}")
+        print(f"    Loaded {loaded_count} PDF files successfully")
 
     return docs
 

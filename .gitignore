@@ -1,3 +1,11 @@
+# ──────────────────────────────────────────────
+# SENSITIVE DATA — NEVER push PDFs to GitHub
+# ──────────────────────────────────────────────
+data/*.pdf
+data/*.PDF
+data/**/*.pdf
+data/**/*.PDF
+
 # Python
 __pycache__/
 *.py[cod]
@@ -7,15 +15,20 @@ dist/
 build/
 .venv/
 venv/
+.eggs/
+*.egg
 
-# Environment
+# Environment and secrets
 .env
+*.env
+.env.*
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
@@ -28,5 +41,9 @@ fix-*.sh
 *-test.txt
 WRITE_TEST.txt
 
-# Data (users add their own)
-# data/ is tracked for samples
+# Elasticsearch data (Docker volume)
+es_data/
+esdata/
+
+# Logs
+*.log
