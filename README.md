@@ -1,336 +1,312 @@
-# elastic-agent-local
+# Elastic Agent Local
 
-A **$0-cost, fully local** agentic RAG system that replicates the [Elastic AI Agent Builder](https://www.elastic.co/search-labs/blog/ai-agentic-workflows-elastic-ai-agent-builder) architecture using 100% free, open-source components.
+A **$0-cost local implementation** of the [Elastic AI Agent Builder](https://www.elastic.co/search-labs/blog/ai-agentic-workflows-elastic-ai-agent-builder) architecture using 100% free, open-source components. No API keys, no cloud bills, no Enterprise license — everything runs on your Mac.
 
-No API keys. No cloud subscriptions. No data leaves your machine.
+---
 
-```
-User  →  Streamlit UI  →  LangGraph Agent  →  Tools
-                                                 ├── Elasticsearch (vector search)
-                                                 ├── DuckDuckGo (web fallback)
-                                                 └── Calculator
-                            ↕
-                        Ollama (local LLM)
-```
+## What Is This?
+
+In October 2025, Elastic announced **AI Agent Builder** — a platform for building context-driven AI agents powered by Elasticsearch. It reached [general availability in January 2026](https://www.elastic.co/search-labs/blog/agent-builder-elastic-ga) with support for [MCP](https://www.elastic.co/search-labs/blog/agent-builder-mcp-reference-architecture-elasticsearch) (Model Context Protocol) and [A2A](https://www.elastic.co/search-labs/blog/a2a-protocol-mcp-llm-agent-newsroom-elasticsearch) (Agent-to-Agent) protocols.
+
+**The problem:** Agent Builder requires an Elastic Cloud or Enterprise license.
+
+**This project** replicates the core architecture — adaptive RAG with routing, grading, and tool use — using only free components you can run locally.
+
+---
+
+## Why the Hype?
+
+The excitement around Elastic's Agent Builder stems from three converging trends:
+
+### 1. Agentic RAG (the research breakthrough)
+
+Traditional RAG follows a rigid retrieve-then-generate pipeline. A [January 2025 survey paper on arXiv](https://arxiv.org/abs/2501.09136) formalized **Agentic RAG** — embedding autonomous agents into the RAG pipeline with design patterns like reflection, planning, tool use, and multi-agent collaboration. Instead of a fixed pipeline, agents dynamically decide what to fetch, which tools to call, when to re-query, and how to verify answers.
+
+### 2. Context Engineering (Elastic's approach)
+
+Elastic positions Agent Builder as a **context engineering platform** — going beyond simple vector search to intelligently select tools, prepare data, and deliver precisely the right context to LLMs. This means the agent doesn't just search; it understands data structure, translates natural language into optimized queries (semantic, hybrid, or structured), and returns only what matters.
+
+### 3. Open Protocols (MCP + A2A)
+
+Agent Builder natively supports **MCP** (standardized tool access — works with Claude Desktop, Cursor, VS Code) and **A2A** (agent-to-agent coordination for multi-agent workflows). This interoperability, combined with partnerships like Microsoft Foundry integration, positions it as an enterprise-grade platform rather than a demo.
+
+---
 
 ## Architecture
 
-This project mirrors the five pillars of Elastic's AI Agent Builder:
-
-| Elastic Agent Builder (Enterprise) | This Project ($0)              |
-|------------------------------------|--------------------------------|
-| Elastic Cloud + Enterprise license | Elasticsearch 8.17 (Docker)    |
-| Elastic-managed LLM connector      | Ollama (local LLMs)            |
-| Agent Builder orchestration         | LangGraph + LangChain          |
-| Built-in tools & MCP server         | Custom tools + open MCP        |
-| Kibana Agent Builder UI             | Streamlit chat interface        |
-
-### Agent Workflow
-
-The LangGraph agent uses an **Adaptive RAG** pattern with routing, retrieval, grading, and fallback:
+This project implements the **Adaptive RAG** pattern from the Elastic blog:
 
 ```
-START → route_question
-  ├─ 'vectorstore' → retrieve → grade_documents
-  │                               ├─ relevant docs → generate → END
-  │                               └─ no relevant docs → web_search → generate_with_web → END
-  ├─ 'websearch'   → web_search → generate_with_web → END
-  └─ 'direct'      → direct_response → END
+                         ┌──────────────┐
+                         │  User Query  │
+                         └──────┬───────┘
+                                │
+                         ┌──────▼───────┐
+                         │    Router    │  ← Keyword matching (instant)
+                         └──────┬───────┘
+                    ┌───────────┼───────────┐
+                    │           │           │
+             ┌──────▼──┐ ┌─────▼────┐ ┌────▼───────┐
+             │  Vector  │ │   Web    │ │   Direct   │
+             │  Search  │ │  Search  │ │  Response  │
+             └──────┬───┘ └─────┬────┘ └────┬───────┘
+                    │           │           │
+             ┌──────▼──┐       │           │
+             │  Grade  │       │           │
+             │  Docs   │       │           │
+             └──────┬───┘       │           │
+              ┌─────┼─────┐    │           │
+              │           │    │           │
+        ┌─────▼───┐ ┌─────▼────▼┐          │
+        │ Generate │ │ Generate  │          │
+        │ from KB  │ │ from Web  │          │
+        └─────┬───┘ └─────┬─────┘          │
+              │           │                │
+              └───────────┴────────────────┘
+                          │
+                   ┌──────▼───────┐
+                   │   Response   │
+                   └──────────────┘
 ```
 
-The router LLM classifies each question and dynamically selects the best path.
+### How It Maps to Elastic Agent Builder
+
+| Elastic Agent Builder (Enterprise)      | This Project (Free)                    |
+|-----------------------------------------|----------------------------------------|
+| Elasticsearch Cloud                     | Elasticsearch 8.17 (Docker, local)     |
+| Elastic AI Connector (OpenAI/Azure)     | Ollama + llama3.2 (local LLM)          |
+| Elastic Learned Sparse Encoder          | nomic-embed-text (local embeddings)    |
+| Agent Builder orchestration             | LangGraph StateGraph                   |
+| Agent Builder built-in search tool      | LangChain ElasticsearchStore           |
+| Agent Builder custom tools (MCP)        | DuckDuckGo search + Calculator tools   |
+| Kibana Agent Chat UI                    | Streamlit chat interface               |
+| Elastic Workflows (YAML)               | LangGraph conditional edges            |
+
+---
 
 ## Tech Stack
 
-| Component        | Version   | Port  | Purpose                        |
-|------------------|-----------|-------|--------------------------------|
-| Elasticsearch    | 8.17      | 9200  | Vector store + hybrid search   |
-| Kibana           | 8.17      | 5601  | Data management UI             |
-| Ollama           | latest    | 11434 | Local LLM inference            |
-| llama3.2         | 3B        | —     | Reasoning and generation       |
-| nomic-embed-text | 274MB     | —     | Document & query embeddings    |
-| LangGraph        | 1.0+      | —     | Agent workflow orchestration   |
-| LangChain        | 1.0+      | —     | Tool framework & integrations  |
-| Streamlit        | 1.54+     | 8501  | Chat UI                        |
-| Python           | 3.11+     | —     | Runtime                        |
-| Docker           | latest    | —     | Container runtime              |
+| Component             | Version    | Role                                  |
+|-----------------------|------------|---------------------------------------|
+| **Elasticsearch**     | 8.17       | Vector store + hybrid search          |
+| **Kibana**            | 8.17       | Data visualization (optional)         |
+| **Ollama**            | latest     | Local LLM inference server            |
+| **llama3.2** (3B)     | latest     | Reasoning and generation              |
+| **nomic-embed-text**  | latest     | Document embeddings (768-dim)         |
+| **LangGraph**         | 1.0+       | Agent workflow orchestration          |
+| **LangChain**         | 1.0+       | Tool framework and integrations       |
+| **Streamlit**         | 1.40+      | Chat UI                               |
+| **DuckDuckGo Search** | 7.0+       | Web search fallback (no API key)      |
+| **Docker Compose**    | v2         | Container orchestration               |
+
+---
 
 ## Prerequisites
 
-Install these before starting:
+- **Docker Desktop** — [docker.com](https://www.docker.com/products/docker-desktop)
+- **Ollama** — [ollama.com](https://ollama.com)
+- **Python 3.11+** — `python3 --version`
+- **~8 GB free RAM** (Elasticsearch needs ~2 GB, Ollama needs ~4 GB for llama3.2)
 
-- **Docker Desktop** — [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)
-- **Python 3.11+** — [python.org](https://www.python.org/) (or via `brew install python`)
-- **Ollama** — [ollama.com](https://ollama.com/) (or via `brew install ollama`)
-- **16 GB RAM recommended** (8 GB minimum — use smaller models)
-
-### macOS (Homebrew)
-
-```bash
-brew install python ollama
-brew install --cask docker
-```
-
-### Verify prerequisites
-
-```bash
-docker --version        # Docker version 27.x+
-python3 --version       # Python 3.11+
-ollama --version        # ollama version 0.15+
-```
+---
 
 ## Quick Start
 
-### Option A: One-command startup
+### One Command
 
 ```bash
-git clone <this-repo> && cd elastic-agent-local
+# Apple Silicon Mac
 bash start.sh
+
+# Intel Mac
+/bin/bash start.sh
 ```
 
-### Option B: Step by step
+This starts everything: Docker, Elasticsearch, Kibana, Ollama, pulls models, installs Python deps, ingests documents, and launches the chat UI at http://localhost:8501.
+
+### Step by Step
 
 ```bash
-# 1. Clone and enter the project
-git clone <this-repo>
+# 1. Clone the repo
+git clone https://github.com/giritharanchockalingam/elastic-agent-local.git
 cd elastic-agent-local
 
-# 2. Copy environment config
+# 2. Copy environment file
 cp .env.example .env
 
 # 3. Start Elasticsearch + Kibana
 docker compose up -d
 
-# 4. Wait for Elasticsearch to be healthy (takes ~30 seconds)
-until curl -s http://localhost:9200 > /dev/null 2>&1; do
-  echo "Waiting for Elasticsearch..."
-  sleep 5
-done
-echo "Elasticsearch is ready!"
-
-# 5. Start Ollama and pull models
-brew services start ollama    # macOS
-# OR: ollama serve &          # Linux
-
+# 4. Pull Ollama models
 ollama pull llama3.2
 ollama pull nomic-embed-text
 
-# 6. Create Python virtual environment and install dependencies
+# 5. Create Python virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e "."
 
-# 7. Ingest sample documents into Elasticsearch
+# 6. Ingest sample documents
 python -m src.ingest.loader
 
-# 8. Launch the chat UI
+# 7. Launch the chat UI
 streamlit run src/ui/app.py
 ```
 
-Open **http://localhost:8501** in your browser. You should see the chat interface with green "Connected" status for both Elasticsearch and Ollama in the sidebar.
+Open http://localhost:8501 in your browser.
 
-## Usage
-
-### Chat Interface
-
-The Streamlit UI at `http://localhost:8501` provides:
-
-- **Chat input** — type any question
-- **Route indicator** — shows which path the agent took (vectorstore/websearch/direct)
-- **Sidebar** — connection status, model info, document count, clear chat button
-
-### Example queries
-
-| Query | Expected Route | What Happens |
-|-------|---------------|--------------|
-| "What is Elasticsearch?" | vectorstore | Retrieves from ingested docs, grades relevance, generates answer |
-| "What are AI agents?" | vectorstore | Same — uses knowledge base |
-| "What happened in the news today?" | websearch | Falls back to DuckDuckGo, generates from web results |
-| "Hello!" | direct | Responds directly without any retrieval |
-| "What is 42 * 17?" | direct | LLM answers (calculator tool available for extensions) |
-
-### Adding your own documents
-
-Drop `.txt` or `.md` files into the `data/` folder, then re-run ingestion:
-
-```bash
-source .venv/bin/activate
-python -m src.ingest.loader
-```
-
-### Using the Makefile
-
-```bash
-make setup    # Install all dependencies
-make up       # Start Elasticsearch + Kibana
-make down     # Stop containers
-make ingest   # Run the document ingestion pipeline
-make chat     # Launch the Streamlit UI
-make test     # Run pytest
-make clean    # Remove ES data volume and reset
-make all      # Full setup + ingest + launch
-```
-
-### Running the agent from the command line
-
-```bash
-source .venv/bin/activate
-python -m src.agent.graph
-```
-
-This runs a quick test with "Hello, what can you help me with?" and prints the response and route.
+---
 
 ## Project Structure
 
 ```
 elastic-agent-local/
-├── docker-compose.yml           # Elasticsearch 8.17 + Kibana (Docker)
-├── pyproject.toml               # Python dependencies
-├── .env.example                 # Environment variable template
-├── .env                         # Your local config (gitignored)
-├── start.sh                     # One-command startup script
-├── Makefile                     # Common operations
-├── README.md                    # This file
-│
+├── docker-compose.yml          # Elasticsearch 8.17 + Kibana
+├── pyproject.toml              # Python dependencies
+├── start.sh                    # One-command startup script
+├── .env.example                # Environment config template
+├── data/
+│   ├── sample-elasticsearch.txt  # Sample: ES features & Query DSL
+│   └── sample-agents.txt        # Sample: AI agents & RAG patterns
 ├── src/
-│   ├── config.py                # Pydantic Settings (loads from .env)
-│   │
-│   ├── agent/                   # LangGraph agent core
-│   │   ├── state.py             # AgentState TypedDict
-│   │   ├── nodes.py             # Node functions (route, retrieve, grade, generate)
-│   │   └── graph.py             # StateGraph workflow assembly
-│   │
-│   ├── tools/                   # Agent tools
-│   │   ├── elastic_search.py    # Elasticsearch similarity search (@tool)
-│   │   ├── web_search.py        # DuckDuckGo web search fallback (@tool)
-│   │   └── calculator.py        # Safe math expression evaluator (@tool)
-│   │
-│   ├── ingest/                  # Data ingestion pipeline
-│   │   └── loader.py            # Load → Chunk → Embed → Store in ES
-│   │
+│   ├── config.py               # Pydantic Settings (loads .env)
+│   ├── ingest/
+│   │   └── loader.py           # Document chunking & embedding pipeline
+│   ├── tools/
+│   │   ├── elastic_search.py   # Vector similarity search tool
+│   │   ├── web_search.py       # DuckDuckGo search fallback
+│   │   └── calculator.py       # Safe math expression evaluator
+│   ├── agent/
+│   │   ├── state.py            # AgentState TypedDict schema
+│   │   ├── nodes.py            # 7 workflow nodes (route, retrieve, grade, generate...)
+│   │   └── graph.py            # LangGraph StateGraph definition
 │   └── ui/
-│       └── app.py               # Streamlit chat interface
-│
-├── data/                        # Documents to ingest (add your .txt/.md files here)
-│   ├── sample-elasticsearch.txt # Sample: Elasticsearch concepts
-│   └── sample-agents.txt        # Sample: AI agent patterns
-│
+│       └── app.py              # Streamlit chat interface
 └── tests/
-    ├── test_tools.py
-    └── test_agent.py
+    ├── test_tools.py           # Tool unit tests (placeholder)
+    └── test_agent.py           # Agent integration tests (placeholder)
 ```
+
+---
 
 ## Configuration
 
-All settings are in `.env` (copied from `.env.example`):
+All settings are in `.env` (copy from `.env.example`):
 
-```bash
-# Elasticsearch
+```env
 ELASTICSEARCH_URL=http://localhost:9200
 ES_INDEX_NAME=knowledge-base
-
-# Ollama (local LLM)
 OLLAMA_BASE_URL=http://localhost:11434
-LLM_MODEL=llama3.2              # Change to qwen2.5:14b for better quality
+LLM_MODEL=llama3.2
 EMBEDDING_MODEL=nomic-embed-text
-
-# Document ingestion
 CHUNK_SIZE=500
 CHUNK_OVERLAP=50
 ```
 
-### Choosing a model
+### Model Options
 
-| Your RAM | Model | Command | Quality |
-|----------|-------|---------|---------|
-| 8 GB     | llama3.2 (3B) | `ollama pull llama3.2` | Good |
-| 16 GB    | llama3.1:8b | `ollama pull llama3.1:8b` | Better |
-| 32 GB    | qwen2.5:14b | `ollama pull qwen2.5:14b` | Best |
+| Model               | Size   | Speed        | Quality    | Best For             |
+|----------------------|--------|-------------|------------|----------------------|
+| llama3.2 (default)   | 2 GB   | Fast (GPU)  | Good       | Apple Silicon Macs   |
+| llama3.2:1b          | 1.3 GB | Faster      | Acceptable | Intel Macs (CPU)     |
+| llama3.1:8b          | 4.7 GB | Slower      | Better     | Quality-focused      |
+| mistral              | 4.1 GB | Medium      | Good       | Alternative          |
 
-Update `LLM_MODEL` in `.env` after pulling a different model.
+To change models, update `LLM_MODEL` in `.env` and pull with `ollama pull <model>`.
+
+---
+
+## Usage Examples
+
+**Knowledge base query** (routes to Elasticsearch):
+> "What is Elasticsearch and how does it handle vector search?"
+
+**Web search** (routes to DuckDuckGo):
+> "What's the latest news about AI agents?"
+
+**Direct response** (no retrieval needed):
+> "Hello! What can you help me with?"
+
+**Add your own documents:**
+Drop `.txt` or `.md` files into the `data/` folder and re-run ingestion:
+```bash
+source .venv/bin/activate
+python -m src.ingest.loader
+```
+
+---
 
 ## Troubleshooting
 
+### Intel Mac: "Bad CPU type in executable"
+
+If you see `bash: /opt/homebrew/bin/bash: Bad CPU type in executable`, your Intel Mac has ARM Homebrew binaries in PATH. Fix:
+
+```bash
+/bin/bash start.sh    # Use system bash instead
+```
+
+Also consider using `llama3.2:1b` for faster CPU inference — edit `.env`:
+```
+LLM_MODEL=llama3.2:1b
+```
+
 ### Elasticsearch won't start
+
+Check Docker memory allocation (needs at least 4 GB for Docker Desktop):
 ```bash
-docker compose logs elasticsearch    # Check for errors
-docker compose down && docker compose up -d   # Restart
+docker compose logs elasticsearch
 ```
 
-### Ollama not reachable
+### Ollama model pull fails
+
+Ensure Ollama is running:
 ```bash
-brew services restart ollama    # macOS
-ollama list                     # Verify models are pulled
-curl http://localhost:11434     # Should return "Ollama is running"
+ollama serve    # Start Ollama
+ollama list     # Check installed models
 ```
 
-### "No documents found" during ingestion
-Make sure you have `.txt` or `.md` files in the `data/` folder:
+### Streamlit shows "Ollama: Not reachable"
+
+Verify Ollama is running at the expected URL:
 ```bash
-ls data/
+curl http://localhost:11434/api/tags
 ```
 
-### Pydantic V1 warning with Python 3.14
-This is a harmless deprecation warning from langchain_core. It doesn't affect functionality.
-
-### Port already in use
-```bash
-# Kill existing Streamlit process
-lsof -ti:8501 | xargs kill -9
-
-# Kill existing Elasticsearch
-docker compose down
-```
-
-### "Bad CPU type in executable" on Intel Mac
-
-If you see `bash: /opt/homebrew/bin/bash: Bad CPU type in executable`, your system has Apple Silicon Homebrew installed on an Intel Mac. Fix:
-
-```bash
-# Option 1: Use the system bash directly
-/bin/bash start.sh
-
-# Option 2: Fix your PATH permanently (add to ~/.zshrc or ~/.bash_profile)
-export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
-```
+---
 
 ## How It Was Built
 
-This project was built using a **vibecoding** approach — natural language prompts fed to an AI coding assistant across 10 phases:
+This project was built entirely through **vibecoding** — using AI-assisted development (Claude via Cowork) to architect, implement, and deploy the full stack in a single session. The process followed a 10-phase approach from scaffolding through deployment, with iterative testing at each stage.
 
-1. **Phase 1** — Project scaffolding (pyproject.toml, docker-compose.yml, config)
-2. **Phase 2** — Infrastructure setup (Docker, Ollama, Python venv)
-3. **Phase 3** — Document ingestion pipeline (load → chunk → embed → store)
-4. **Phase 4** — Agent tools (Elasticsearch search, DuckDuckGo, calculator)
-5. **Phase 5** — Agent core (LangGraph state, nodes, workflow graph)
-6. **Phase 6** — Streamlit chat UI
-7. **Phase 7** — MCP integration (optional)
-8. **Phase 8** — Testing
-9. **Phase 9** — Deployment scripts
-10. **Phase 10** — Extensions (memory, multi-agent, observability)
-
-See `vibecoding-elastic-agent-guide.md` for the full playbook with copy-paste prompts.
+---
 
 ## Cost Breakdown
 
-| Resource          | Cost |
-|-------------------|------|
-| Elasticsearch     | $0 — Basic license, local Docker |
-| Kibana            | $0 — Basic license, local Docker |
-| Ollama            | $0 — Open source |
-| LLM models        | $0 — Open weights, local inference |
-| LangGraph/Chain   | $0 — Open source, MIT license |
-| Streamlit         | $0 — Open source |
-| DuckDuckGo search | $0 — Free, no API key |
-| **Total**         | **$0** |
+| Resource          | Cost      |
+|-------------------|-----------|
+| Elasticsearch     | $0 (OSS Docker image)    |
+| Kibana            | $0 (OSS Docker image)    |
+| Ollama            | $0 (open source)         |
+| llama3.2          | $0 (open weights)        |
+| nomic-embed-text  | $0 (open weights)        |
+| LangGraph         | $0 (open source)         |
+| Streamlit         | $0 (open source)         |
+| DuckDuckGo Search | $0 (no API key)          |
+| **Total**         | **$0**                   |
+
+---
 
 ## References
 
-- [How to Build AI Agentic Workflows with Elasticsearch](https://www.elastic.co/search-labs/blog/ai-agentic-workflows-elastic-ai-agent-builder) — Original architecture
-- [Local RAG Agent with LangGraph, Llama3 & Elasticsearch](https://www.elastic.co/search-labs/blog/local-rag-agent-elasticsearch-langgraph-llama3) — Elastic's local agent tutorial
-- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
-- [LangChain Ollama Integration](https://python.langchain.com/docs/integrations/providers/ollama)
-- [Ollama Model Library](https://ollama.com/library)
+- [How to Build AI Agentic Workflows with Elasticsearch](https://www.elastic.co/search-labs/blog/ai-agentic-workflows-elastic-ai-agent-builder) — The original Elastic blog post this project replicates
+- [Agent Builder GA Announcement](https://www.elastic.co/search-labs/blog/agent-builder-elastic-ga) — General availability with MCP and A2A
+- [Agentic RAG Survey Paper (arXiv 2501.09136)](https://arxiv.org/abs/2501.09136) — Academic survey on Agentic RAG architectures
+- [Elastic Agent Builder + MCP Reference Architecture](https://www.elastic.co/search-labs/blog/agent-builder-mcp-reference-architecture-elasticsearch) — MCP integration patterns
+- [A2A Protocol + MCP in Elasticsearch](https://www.elastic.co/search-labs/blog/a2a-protocol-mcp-llm-agent-newsroom-elasticsearch) — Multi-agent workflows
+- [Elastic AI Agent Builder: Context Engineering](https://www.elastic.co/search-labs/blog/elastic-ai-agent-builder-context-engineering-introduction) — Context engineering deep dive
+
+---
 
 ## License
 
