@@ -2,8 +2,9 @@
 
 Each node takes AgentState, performs an action, and returns a partial state update.
 
-Optimized: keyword routing + skip LLM grading = only 1 LLM call per question.
-This makes it fast on both Apple Silicon (GPU) and Intel (CPU-only).
+Routing strategy: default to knowledge base search (vectorstore) since we have
+thousands of chunks of real data. Only route to "direct" for simple greetings,
+and to "websearch" for current events. Skip LLM grading = only 1 LLM call per question.
 """
 
 import platform
@@ -29,33 +30,40 @@ def _get_llm() -> ChatOllama:
 
 
 # ──────────────────────────────────────────────
-# Node: route_question (keyword-based — no LLM call)
+# Node: route_question (default to vectorstore)
 # ──────────────────────────────────────────────
 def route_question(state: dict) -> dict:
-    """Classify the question using keyword matching (instant, no LLM call)."""
+    """Route question — defaults to vectorstore since we have a large knowledge base.
+
+    With 5000+ chunks of real project data, most questions should search the KB first.
+    Only simple greetings go direct, and current-events questions go to web search.
+    """
     print("--- NODE: route_question ---")
 
     question = state["question"]
-    q_lower = question.lower()
+    q_lower = question.lower().strip()
 
-    kb_keywords = [
-        "elasticsearch", "elastic", "search", "index", "query", "vector",
-        "agent", "rag", "langchain", "langgraph", "mcp", "embedding",
-        "document", "knowledge", "ingest", "kibana", "mapping", "esql",
-        "retrieval", "chunk", "ollama",
+    # Only these go to direct — simple greetings and chitchat
+    direct_patterns = [
+        "hello", "hi", "hey", "good morning", "good evening", "good afternoon",
+        "thanks", "thank you", "bye", "goodbye", "how are you",
+        "what can you do", "who are you", "what are you",
     ]
+
+    # Current events go to web search
     web_keywords = [
-        "latest", "news", "current", "today", "weather", "price",
-        "stock", "score", "who won", "what happened", "recent",
-        "2024", "2025", "2026", "yesterday", "this week",
+        "latest news", "current events", "weather", "stock price",
+        "who won", "what happened today", "this week in",
+        "breaking news", "right now",
     ]
 
-    if any(kw in q_lower for kw in kb_keywords):
-        route = "vectorstore"
+    if any(q_lower.startswith(p) or q_lower == p for p in direct_patterns):
+        route = "direct"
     elif any(kw in q_lower for kw in web_keywords):
         route = "websearch"
     else:
-        route = "direct"
+        # Default: search the knowledge base first
+        route = "vectorstore"
 
     print(f"   Route: {route}")
     return {"route": route}
